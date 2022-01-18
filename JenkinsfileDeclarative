@@ -1,0 +1,74 @@
+pipeline{
+
+agent any
+
+tools{
+maven 'maven3.8.4'
+}
+triggers {
+  pollSCM '* * * * *'
+  //cron '* * * * *'
+}
+
+options{
+     //Add the timestamp to the console output
+	 timestamps()
+	 //Discard old bills
+	 buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '5', daysToKeepStr: '', numToKeepStr: '5')
+}
+
+   stages{
+       stage('CheckoutCode'){
+	   steps{
+	    git branch: 'development', credentialsId: '7d2dc11c-7a6d-4913-b99b-e6c5fdff42ce', url:
+        'https://github.com/sayalaranga/maven-web-application.git'
+		}
+		}
+		
+		//Do the Build
+		stage('Build'){
+		steps{
+		sh "mvn clean package"
+		}
+		}
+		//Execute SonarQube Report
+		stage('SonarQubeReport'){
+		steps{
+		sh "mvn clean sonar:sonar"
+		}
+		}
+		//Upload Artifact into Nexus Server
+		stage('UploadArtifactIntoNexusServer'){
+		steps{
+		sh "mvn clean deploy"
+		}
+		}
+		//Deploy App into Tomcat Server
+		stage('DeployAppIntoTomcatServer'){
+		steps{
+		sshagent(['84a5397e-78cc-40f2-9346-7c4d97bd685f']) {
+        sh "scp -o StrictHostKeyChecking=no target/maven-web-application.war ec2-user@13.234.225.150:/opt/apache-tomcat-9.0.56/webapps/"
+		}
+		}
+		}
+		
+		
+ }//stages closing
+ post {
+  always {
+    emailext body: '''Build over
+    Regards
+    Bhaskar''', subject: 'Build over', to: 'sayalaranga@gmail.com'
+  }
+  success {
+    emailext body: '''Build success 
+    Regards
+    Bhaskar''', subject: 'Build over', to: 'sayalaranga@gmail.com'
+  }
+  failure {
+    emailext body: '''Build failure
+    Regards
+    Bhaskar''', subject: 'Build over', to: 'sayalaranga@gmail.com'
+  }
+}
+}//Pipeline closing 
